@@ -1,10 +1,10 @@
 {
 	"id": "git-file-explorer",
 	"name": "Git File Explorer",
-	"version": "0.7.1",
+	"version": "0.8.0",
 	"minAppVersion": "0.15.0",
-	"description": "Add relevant git information to detected git repostitories in the file explorer.",
-	"author": "Mateus Molina",
-	"authorUrl": "https://mateusmolina.github.io",
+	"description": "Highlight changed files in the file explorer based on git status. Supports vaults nested inside git repositories.",
+	"author": "Wolfgang Wopperer-Beholz (forked from Mateus Molina)",
+	"authorUrl": "https://github.com/wowo101/obsidian-git-file-explorer",
 	"isDesktopOnly": true
 }
