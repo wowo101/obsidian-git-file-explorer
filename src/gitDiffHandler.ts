@@ -23,7 +23,7 @@ export class GitDiffHandler implements CapabilityProvider {
 		const absPath = this.buildAbsPathTo(folderPath);
 		
 		// Check if this file/folder is within a git repository
-		const repoRoot = this.findGitRepoRoot(absPath);
+		const repoRoot = GitRepository.findGitRepoRoot(absPath);
 		if (!repoRoot) return;
 		
 		try {
@@ -65,27 +65,4 @@ export class GitDiffHandler implements CapabilityProvider {
 	}
 
 	private buildAbsPathTo = (path: string) => join(this.basePath, path);
-	
-	// Find the git repository root by walking up the directory tree
-	private findGitRepoRoot(startPath: string): string | null {
-		let currentPath = startPath;
-		
-		while (currentPath && currentPath.length > 0) {
-			if (GitRepository.isGitRepo(currentPath)) {
-				return currentPath;
-			}
-			
-			// Go up one directory
-			const parentPath = join(currentPath, "..");
-			
-			// If we're at the root, stop searching
-			if (parentPath === currentPath) {
-				return null;
-			}
-			
-			currentPath = parentPath;
-		}
-		
-		return null;
-	}
 }

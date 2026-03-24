@@ -1,23 +1,21 @@
-import { Plugin, FileExplorer, FileSystemAdapter } from "obsidian";
-import { FileExplorerHandler } from "./src/fileExplorerHandler";
-import { WidgetManager } from "src/widgets/widgetManager";
-import { GitWidgetFactory } from "src/widgets/gitWidgetFactory";
-import {
-	DEFAULT_SETTINGS,
-	GitFileExplorerPluginSettings,
-	GitFileExplorerSettingTab,
-} from "./src/settings";
-import { InitNewRepoHandler } from "src/initNewRepoHandler";
+import { Plugin, FileSystemAdapter } from "obsidian";
+import { GitRepository } from "./src/git/gitRepository";
+import { NavColorUpdater } from "./src/navColorUpdater";
 import { GitDiffHandler } from "src/gitDiffHandler";
 import { ViewRemoteHandler } from "src/viewRemoteHandler";
 import { ContextMenuInstaller } from "src/contextMenuInstaller";
 import { CommandRegister } from "src/commandRegister";
 import { CapabilityProvider } from "src/capabilityProvider";
+import {
+	DEFAULT_SETTINGS,
+	GitFileExplorerPluginSettings,
+	GitFileExplorerSettingTab,
+} from "./src/settings";
 
 export default class GitFileExplorerPlugin extends Plugin {
 	settings: GitFileExplorerPluginSettings;
-	widgetManager: WidgetManager;
-	fileExplorerHandler: FileExplorerHandler;
+	private gitRepo: GitRepository | null = null;
+	private navColorUpdater: NavColorUpdater | null = null;
 
 	async onload() {
 		await this.loadSettings();
@@ -26,42 +24,54 @@ export default class GitFileExplorerPlugin extends Plugin {
 	}
 
 	initialize = async () => {
-		this.fileExplorerHandler = new FileExplorerHandler(this.app);
+		const vaultBasePath = this.getVaultBasePath();
+		if (!vaultBasePath) return;
 
-		if (!this.fileExplorerHandler.fileExplorer) return;
+		const repoRoot = GitRepository.findGitRepoRoot(vaultBasePath);
+		if (!repoRoot) return;
 
-		this.widgetManager = new WidgetManager(
-			new GitWidgetFactory(this.app, this.settings),
-			this.fileExplorerHandler,
-			this.getVaultBasePath()
-		);
+		try {
+			this.gitRepo = await GitRepository.getInstance(vaultBasePath);
+		} catch {
+			return;
+		}
 
-		await this.widgetManager.update();
+		if (this.settings.enableNavColorUpdater) {
+			this.navColorUpdater = new NavColorUpdater(this.settings.navColorStyle);
+			await this.refreshFileColors();
+		}
 
-		this.registerEventListeners(this.widgetManager.update);
+		this.registerEvent(this.app.vault.on("create", () => this.refreshFileColors()));
+		this.registerEvent(this.app.vault.on("delete", () => this.refreshFileColors()));
+		this.registerEvent(this.app.vault.on("rename", () => this.refreshFileColors()));
+		this.registerEvent(this.app.vault.on("modify", () => this.refreshFileColors()));
 
 		const capabilityProviders: CapabilityProvider[] = [
-			new GitDiffHandler(this.getVaultBasePath())
-				.withCallback(() => this.widgetManager?.update()),
-			new InitNewRepoHandler(this.getVaultBasePath())
-				.withCallback(() => this.widgetManager?.update()),
-			new ViewRemoteHandler(this.getVaultBasePath())
+			new GitDiffHandler(vaultBasePath),
+			new ViewRemoteHandler(vaultBasePath),
 		];
 
 		const contextMenuInstaller = new ContextMenuInstaller(this);
-		
 		const commandRegister = new CommandRegister(this);
-		
+
 		capabilityProviders.forEach(provider => {
 			contextMenuInstaller.installContextMenu(provider);
 			commandRegister.registerCommandForActiveFile(provider);
 		});
 	};
 
+	private async refreshFileColors(): Promise<void> {
+		if (!this.gitRepo || !this.navColorUpdater) return;
+		try {
+			const changedFiles = await this.gitRepo.getChangedFiles();
+			this.navColorUpdater.update(changedFiles);
+		} catch {
+			// silently ignore git errors
+		}
+	}
+
 	onunload() {
-		console.log("Unloading GitFileExplorerPlugin");
-		this.widgetManager.uninstallAll();
-		this.deregisterEventListeners(this.widgetManager.update);
+		this.navColorUpdater?.cleanup();
 	}
 
 	async loadSettings() {
@@ -82,23 +92,5 @@ export default class GitFileExplorerPlugin extends Plugin {
 			return adapter.getBasePath();
 		}
 		return "";
-	}
-
-	private registerEventListeners(callback: () => void) {
-		this.registerEvent(this.app.vault.on("create", callback));
-		this.registerEvent(this.app.vault.on("delete", callback));
-		this.registerEvent(this.app.vault.on("rename", callback));
-		this.registerEvent(this.app.vault.on("modify", callback));
-		this.fileExplorerHandler.fileExplorer?.containerEl.addEventListener(
-			"click",
-			callback
-		);
-	}
-
-	private deregisterEventListeners(callback: () => void) {
-		this.fileExplorerHandler.fileExplorer?.containerEl.removeEventListener(
-			"click",
-			callback
-		);
 	}
 }
