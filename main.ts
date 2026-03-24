@@ -20,7 +20,12 @@ export default class GitFileExplorerPlugin extends Plugin {
 	async onload() {
 		await this.loadSettings();
 		this.addSettingTab(new GitFileExplorerSettingTab(this.app, this));
-		this.app.workspace.onLayoutReady(this.initialize);
+
+		if (this.app.workspace.layoutReady) {
+			await this.initialize();
+		} else {
+			this.app.workspace.onLayoutReady(this.initialize);
+		}
 	}
 
 	initialize = async () => {
