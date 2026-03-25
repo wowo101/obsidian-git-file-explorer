@@ -16,8 +16,6 @@ export default class GitFileExplorerPlugin extends Plugin {
 	settings: GitFileExplorerPluginSettings;
 	private gitRepo: GitRepository | null = null;
 	private navColorUpdater: NavColorUpdater | null = null;
-	private pollInterval: number | null = null;
-	private focusHandler: (() => void) | null = null;
 
 	async onload() {
 		await this.loadSettings();
@@ -53,12 +51,9 @@ export default class GitFileExplorerPlugin extends Plugin {
 		this.registerEvent(this.app.vault.on("rename", () => this.refreshFileColors()));
 		this.registerEvent(this.app.vault.on("modify", () => this.refreshFileColors()));
 
-		// Refresh when window regains focus (catches external git operations)
-		this.focusHandler = () => this.refreshFileColors();
-		window.addEventListener("focus", this.focusHandler);
-
-		// Poll every 15 seconds for changes made outside Obsidian
-		this.pollInterval = window.setInterval(() => this.refreshFileColors(), 15000);
+		// Piggyback on Obsidian Git plugin's status detection
+		// @ts-ignore — custom event from obsidian-git plugin
+		this.registerEvent(this.app.workspace.on("obsidian-git:status-changed", () => this.refreshFileColors()));
 
 		const capabilityProviders: CapabilityProvider[] = [
 			new GitDiffHandler(vaultBasePath),
@@ -86,8 +81,6 @@ export default class GitFileExplorerPlugin extends Plugin {
 
 	onunload() {
 		this.navColorUpdater?.cleanup();
-		if (this.pollInterval != null) window.clearInterval(this.pollInterval);
-		if (this.focusHandler) window.removeEventListener("focus", this.focusHandler);
 	}
 
 	async loadSettings() {
